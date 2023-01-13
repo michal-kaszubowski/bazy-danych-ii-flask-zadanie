@@ -82,5 +82,35 @@ def get_employees_by_occupation_route():
     return jsonify(response)
 
 
+def add_employee(tx, name, occupation, department):
+    locate_employee_with_name = "MATCH (employee:Employee {name: $name}) RETURN employee"
+    locate_employee_with_name_result = tx.run(locate_employee_with_name, name=name).data()
+
+    locate_department = "MATCH (department:Department {name: $department}) RETURN department"
+    locate_department_result = tx.run(locate_department, department=department).data()
+
+    if not locate_employee_with_name_result and locate_department_result:
+        create_employee = """
+            MATCH (department:Department {name: $department})
+            WITH department
+            CREATE (:Employee {name: $name, occupation: $occupation})-[:WORKS_IN]->(department)
+        """
+        tx.run(create_employee, name=name, occupation=occupation, department=department)
+        return {'name': name, 'occupation': occupation, 'department': department}
+
+
+@api.route('/employees', methods=['POST'])
+def add_employee_route():
+    name = request.json['name']
+    occupation = request.json['occupation']
+    department = request.json['department']
+
+    with driver.session() as session:
+        session.write_transaction(add_employee, name, occupation, department)
+
+    response = {'status': 'success'}
+    return jsonify(response)
+
+
 if __name__ == '__main__':
     api.run()
