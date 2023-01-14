@@ -112,5 +112,48 @@ def add_employee_route():
     return jsonify(response)
 
 
+def update_employee(tx, id, name, occupation, department):
+    locate_employee = "MATCH (employee:Employee) WHERE ID(employee) = $id RETURN employee"
+    locate_employee_result = tx.run(locate_employee, id=id).data()
+
+    locate_department = "MATCH (department:Department {name: $department}) RETURN department"
+    locate_department_result = tx.run(locate_department, department=department).data()
+
+    if locate_employee_result and locate_department_result:
+        delete_employee = "MATCH (employee:Employee) WHERE ID(employee) = $id DETACH DELETE employee"
+        tx.run(delete_employee, id=id)
+    else:
+        return None
+
+    locate_name = "MATCH (employee:Employee {name: $name}) RETURN employee"
+    locate_name_result = tx.run(locate_name, name=name).data()
+
+    if not locate_name_result:
+        create_employee = """
+            MATCH (department:Department {name: $department})
+            WITH department
+            CREATE (:Employee {name: $name, occupation: $occupation})-[:WORKS_IN]->(department)
+        """
+        tx.run(create_employee, name=name, occupation=occupation, department=department)
+        return {'name': name, 'occupation': occupation, 'department': department}
+
+
+@api.route('/employees/<int:id>', methods=['PUT'])
+def update_employee_route(id):
+    name = request.json['name']
+    occupation = request.json['occupation']
+    department = request.json['department']
+
+    with driver.session() as session:
+        employee = session.write_transaction(update_employee, id, name, occupation, department)
+
+    if not employee:
+        response = {'message': 'Invalid parameters!'}
+        return jsonify(response)
+    else:
+        response = {'status': 'success'}
+        return jsonify(response)
+
+
 if __name__ == '__main__':
     api.run()
