@@ -191,5 +191,34 @@ def delete_employee_route(id):
         return jsonify(response)
 
 
+def get_subordinates(tx, id):
+    locate_employee = "MATCH (employee:Employee) WHERE ID(employee) = $id RETURN employee"
+    locate_employee_result = tx.run(locate_employee, id=id).data()
+
+    if not locate_employee_result:
+        return None
+    else:
+        locate_subordinates = """
+            MATCH (employee:Employee)-[:MANAGES]->(subordinate:Employee)
+            WHERE ID(employee) = $id
+            RETURN subordinate
+        """
+        locate_subordinates_result = tx.run(locate_subordinates, id=id).data()
+        subordinates = [{
+            'name': result['subordinate']['name'],
+            'occupation': result['subordinate']['occupation']
+        } for result in locate_subordinates_result]
+        return subordinates
+
+
+@api.route('/employees/<int:id>/subordinates', methods=['GET'])
+def get_subordinates_route(id):
+    with driver.session() as session:
+        subordinates = session.read_transaction(get_subordinates, id)
+
+    response = {'subordinates': subordinates}
+    return jsonify(response)
+
+
 if __name__ == '__main__':
     api.run()
