@@ -220,5 +220,42 @@ def get_subordinates_route(id):
     return jsonify(response)
 
 
+def get_department_info(tx, id):
+    locate_department = "MATCH (department:Department) WHERE ID(department) = $id RETURN department"
+    locate_department_result = tx.run(locate_department, id=id).data()
+
+    if locate_department_result:
+        locate_workers = """
+            MATCH (department:Department)<-[:WORKS_IN]-(worker:Employee)
+            WHERE ID(department) = $id
+            WITH worker, department.name AS office
+            RETURN office, worker
+        """
+        locate_workers_result = tx.run(locate_workers, id=id).data()
+        if locate_workers_result:
+            response = {
+                'department': locate_workers_result[0]['office'],
+                'workers': [{
+                    'name': result['worker']['name'],
+                    'occupation': result['worker']['occupation']
+                } for result in locate_workers_result]
+            }
+            return response
+        else:
+            response = {
+                'department': locate_department_result[0]['department']['name'],
+                'workers': []
+            }
+            return response
+
+
+@api.route('/departments/<int:id>', methods=['GET'])
+def get_department_info_route(id):
+    with driver.session() as session:
+        workers = session.read_transaction(get_department_info, id)
+
+    return jsonify(workers)
+
+
 if __name__ == '__main__':
     api.run()
