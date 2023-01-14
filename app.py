@@ -155,5 +155,41 @@ def update_employee_route(id):
         return jsonify(response)
 
 
+def delete_employee(tx, id):
+    locate_connection = """
+        MATCH (employee:Employee)-[conn]->(:Department)
+        WHERE ID(employee) = $id
+        WITH TYPE(conn) AS connection
+        RETURN connection
+    """
+    locate_connection_result = tx.run(locate_connection, id=id).data()
+
+    if locate_connection_result[0]['connection'] == 'MANAGES':
+        del_employee = """
+            MATCH (employee:Employee)-[:MANAGES]->(department:Department)
+            WHERE ID(employee) = $id
+            DETACH DELETE employee, department
+        """
+        tx.run(del_employee, id=id)
+        return {'status': 'success'}
+    else:
+        del_employee = "MATCH (employee:Employee) WHERE ID(employee) = $id DETACH DELETE employee"
+        tx.run(del_employee, id=id)
+        return {'status': 'success'}
+
+
+@api.route('/employees/<int:id>', methods=['DELETE'])
+def delete_employee_route(id):
+    with driver.session() as session:
+        employee = session.write_transaction(delete_employee, id)
+
+    if not employee:
+        response = {'message': 'Employee not found!'}
+        return jsonify(response)
+    else:
+        response = {'status': 'success'}
+        return jsonify(response)
+
+
 if __name__ == '__main__':
     api.run()
