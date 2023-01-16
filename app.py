@@ -323,13 +323,41 @@ def get_departments_by_workers(tx):
         } for result in locate_department_result]
 
 
-@api.route('/departments/workers', methods=['GET'])
+@api.route('/departments/employees', methods=['GET'])
 def get_departments_by_workers_route():
     with driver.session() as session:
         departments = session.read_transaction(get_departments_by_workers)
 
     response = {'departments': departments}
     return jsonify(response)
+
+
+def get_department_workers(tx, id):
+    locate_department = "MATCH (department:Department) WHERE ID(department) = $id RETURN department"
+    locate_department_result = tx.run(locate_department, id=id).data()
+
+    if locate_department_result:
+        locate_workers = """
+            MATCH (department:Department)<-[:WORKS_IN]-(employee:Employee)
+            WHERE ID(department) = $id
+            WITH collect(employee) AS workers
+            RETURN workers
+        """
+        locate_workers_result = tx.run(locate_workers, id=id).data()
+        return locate_workers_result[0]
+
+
+@api.route('/departments/<int:id>/employees', methods=['GET'])
+def get_department_workers_route(id):
+    with driver.session() as session:
+        workers = session.read_transaction(get_department_workers, id)
+
+    if not workers:
+        response = {'message': 'Department not found!'}
+        return jsonify(response)
+    else:
+        response = {'employees': workers}
+        return jsonify(response)
 
 
 if __name__ == '__main__':
