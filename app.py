@@ -228,23 +228,23 @@ def get_department_info(tx, id):
         locate_workers = """
             MATCH (department:Department)<-[:WORKS_IN]-(worker:Employee)
             WHERE ID(department) = $id
-            WITH worker, department.name AS office
-            RETURN office, worker
+            OPTIONAL MATCH (department:Department)<-[:MANAGES]-(chief:Employee)
+            WITH department.name AS office, count(worker) AS workers, chief.name AS manager
+            RETURN office, workers, manager
         """
         locate_workers_result = tx.run(locate_workers, id=id).data()
         if locate_workers_result:
             response = {
                 'department': locate_workers_result[0]['office'],
-                'workers': [{
-                    'name': result['worker']['name'],
-                    'occupation': result['worker']['occupation']
-                } for result in locate_workers_result]
+                'workers': locate_workers_result[0]['workers'],
+                'manager': locate_workers_result[0]['manager']
             }
             return response
         else:
             response = {
                 'department': locate_department_result[0]['department']['name'],
-                'workers': []
+                'workers': 0,
+                'manager': None
             }
             return response
 
