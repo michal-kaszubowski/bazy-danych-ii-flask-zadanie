@@ -257,5 +257,80 @@ def get_department_info_route(id):
     return jsonify(workers)
 
 
+def get_departments(tx):
+    locate_department = """
+        MATCH (department:Department)
+        WITH department.name AS name, ID(department) AS id
+        RETURN name, id
+    """
+    locate_department_results = tx.run(locate_department).data()
+
+    if locate_department_results:
+        departments = [{'name': result['name'], 'id': result['id']} for result in locate_department_results]
+        return departments
+
+
+@api.route('/departments', methods=['GET'])
+def get_departments_route():
+    with driver.session() as session:
+        departments = session.read_transaction(get_departments)
+
+    response = {'departments': departments}
+    return jsonify(response)
+
+
+def get_department(tx, name):
+    locate_department = """
+        MATCH (department:Department {name: $name})
+        WITH department.name AS name, ID(department) AS id
+        RETURN name, id
+    """
+    locate_department_result = tx.run(locate_department, name=name).data()
+
+    if locate_department_result:
+        return {
+            'name': locate_department_result[0]['name'],
+            'id': locate_department_result[0]['id']
+        }
+
+
+@api.route('/departments/<string:name>', methods=['GET'])
+def get_department_route(name):
+    with driver.session() as session:
+        department = session.read_transaction(get_department, name)
+
+    if not department:
+        response = {'message': 'Department not found'}
+        return jsonify(response)
+    else:
+        return jsonify(department)
+
+
+def get_departments_by_workers(tx):
+    locate_department = """
+        MATCH (department:Department)<-[:WORKS_IN]-(worker:Employee)
+        WITH department.name AS name, ID(department) AS id, count(worker) AS workers
+        RETURN name, id, workers
+        ORDER BY workers DESC
+    """
+    locate_department_result = tx.run(locate_department).data()
+
+    if locate_department_result:
+        return [{
+            'name': result['name'],
+            'id': result['id'],
+            'workers': result['workers']
+        } for result in locate_department_result]
+
+
+@api.route('/departments/workers', methods=['GET'])
+def get_departments_by_workers_route():
+    with driver.session() as session:
+        departments = session.read_transaction(get_departments_by_workers)
+
+    response = {'departments': departments}
+    return jsonify(response)
+
+
 if __name__ == '__main__':
     api.run()
